@@ -1,7 +1,9 @@
 
 #include <Windows.h>
 #include <vector>
+#include <thread>
 #include <string>
+#include <chrono>
 #include "resource.h"
 
 #define WINDOW_CLASS_NAME L"MultiThreaded Loader Tool"
@@ -15,6 +17,56 @@ std::vector<std::wstring> g_vecImageFileNames;
 std::vector<std::wstring> g_vecSoundFileNames;
 HINSTANCE g_hInstance;
 bool g_bIsFileLoaded = false;
+
+using namespace std;
+
+vector <HBITMAP> imagesToPrint;
+
+// The threads that do stuff
+vector <thread> workingThreads;
+
+//to be given a value based on a input .txt file
+int dedicatedAmountOfWorkThreads = 2;
+
+
+
+void  loadImage_Proper(std::wstring File_URL)
+{
+	//Grabs the image from the file url and formats them into a bitmap image
+	HBITMAP LoaderFile = (HBITMAP)LoadImageW(NULL, (LPCWSTR)File_URL.c_str(), IMAGE_BITMAP, 100, 100, LR_LOADFROMFILE);
+
+	//Bitmap image is imported into a vector of bitmaps
+	imagesToPrint.push_back(LoaderFile);
+
+}
+
+// This function CAN NOT be multi threaded because windows witchcraft and reasons
+void Controller(HWND wnd, int ImageNo)
+{
+	HBITMAP LoaderFile = imagesToPrint.back();
+	imagesToPrint.pop_back();
+	int xPos = (ImageNo * 100);
+	int yPos = 0;
+
+	//g_lock.lock();
+	if (yPos > 0) {
+		xPos = ((ImageNo - 8 * 100));
+	}
+	else {
+		xPos = ImageNo * 100;
+	}
+	if (xPos >= _kuiWINDOWWIDTH)
+	{
+		yPos += 100;
+		xPos = 0;
+	}
+
+	wnd = CreateWindow(L"STATIC", NULL, WS_VISIBLE | WS_CHILD | SS_BITMAP, xPos, yPos, 0, 0, wnd, NULL, NULL, NULL);
+	//g_Lock.unlock();
+	SendMessageW(wnd, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)LoaderFile);
+
+}
+
 
 bool ChooseImageFilesToLoad(HWND _hwnd)
 {
@@ -120,7 +172,7 @@ bool ChooseSoundFilesToLoad(HWND _hwnd)
 
 		_wstrPathName.resize(ofn.nFileOffset, '\\');
 
-		wchar_t *_pwcharNextFile = &ofn.lpstrFile[ofn.nFileOffset];
+		wchar_t* _pwcharNextFile = &ofn.lpstrFile[ofn.nFileOffset];
 
 		while (*_pwcharNextFile)
 		{
@@ -177,13 +229,81 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 	{
 		switch (LOWORD(_wparam))
 		{
-
-
 		case ID_FILE_LOADIMAGE:
 		{
 			if (ChooseImageFilesToLoad(_hwnd))
 			{
-				//Write code here to create multiple threads to load image files in parallel
+				//TODO: Noman - "Write code here to create multiple threads to load image files in parallel"
+				auto ImageLoadTime_StartFlag = std::chrono::high_resolution_clock::now();
+
+				//Shit to do goes here
+
+
+				if (g_vecImageFileNames.size() > MAX_FILES_TO_OPEN) {
+					g_vecImageFileNames.resize(MAX_FILES_TO_OPEN);
+				}
+
+
+
+				//Records Start Time of the algorithm
+				auto startTime = chrono::steady_clock::now();
+
+				// work loop
+				int WorkToBeDone = g_vecImageFileNames.size();
+				for (int TaskesAllocated = 0; TaskesAllocated < WorkToBeDone;)
+				{
+					thread* MultiThread_ImageLoader = new thread[dedicatedAmountOfWorkThreads];
+
+
+
+					if (dedicatedAmountOfWorkThreads < WorkToBeDone - TaskesAllocated)
+					{
+						for (int threadIndex_No = 0; threadIndex_No < dedicatedAmountOfWorkThreads; threadIndex_No++)
+						{
+							MultiThread_ImageLoader[threadIndex_No] = thread(loadImage_Proper, g_vecImageFileNames.back());
+							g_vecImageFileNames.pop_back();
+						}
+						for (int threadIndex_No = 0; threadIndex_No < dedicatedAmountOfWorkThreads; threadIndex_No++)
+						{
+							if (MultiThread_ImageLoader[threadIndex_No].joinable())
+								MultiThread_ImageLoader[threadIndex_No].join();
+
+							TaskesAllocated++;
+						}
+					}
+					else
+					{
+						int PendingWork = WorkToBeDone - TaskesAllocated;
+						for (int threadIndex_No = 0; threadIndex_No < PendingWork; threadIndex_No++)
+						{
+							MultiThread_ImageLoader[threadIndex_No] = thread(loadImage_Proper, g_vecImageFileNames.back());
+							g_vecImageFileNames.pop_back();
+						}
+						for (int threadIndex_No = 0; threadIndex_No < PendingWork; threadIndex_No++)
+						{
+							if (MultiThread_ImageLoader[threadIndex_No].joinable())
+								MultiThread_ImageLoader[threadIndex_No].join();
+
+							TaskesAllocated++;
+						}
+					}
+
+				}//ENDFOR
+
+				int CurrentImage_Slot = 0;
+				while (imagesToPrint.size() > 0)
+				{
+					Controller(_hwnd, CurrentImage_Slot);
+					CurrentImage_Slot++;
+
+				}
+
+
+
+				auto ImageLoadTime_FinishFlag = std::chrono::high_resolution_clock::now();
+
+				auto ImageLoadTime_TotalExecutionTime = ImageLoadTime_FinishFlag - ImageLoadTime_StartFlag;
+
 			}
 			else
 			{
@@ -193,11 +313,16 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 			return (0);
 		}
 		break;
+
 		case ID_FILE_LOADSOUND:
 		{
 			if (ChooseSoundFilesToLoad(_hwnd))
 			{
-				//Write code here to create multiple threads to load sound files in parallel
+				//Noman - "Write code here to create multiple threads to load sound files in parallel"
+				// Noman's example of what to do
+
+				//THREADPOOL ImageLoader{(size_t) UserSpecifiedThreadCount };
+
 			}
 			else
 			{
@@ -206,12 +331,14 @@ LRESULT CALLBACK WindowProc(HWND _hwnd, UINT _uiMsg, WPARAM _wparam, LPARAM _lpa
 			return (0);
 		}
 		break;
+
 		case ID_EXIT:
 		{
 			SendMessage(_hwnd, WM_CLOSE, 0, 0);
 			return (0);
 		}
 		break;
+
 		default:
 			break;
 		}
@@ -274,6 +401,7 @@ HWND CreateAndRegisterWindow(HINSTANCE _hInstance)
 
 
 
+//Noman - Week 6 (56:00) - "It's already pushing the boundey how window is setup"
 int WINAPI WinMain(HINSTANCE _hInstance,
 	HINSTANCE _hPrevInstance,
 	LPSTR _lpCmdLine,
@@ -281,23 +409,35 @@ int WINAPI WinMain(HINSTANCE _hInstance,
 {
 	MSG msg;  //Generic Message
 
+	//Noman - Week 6 (56:07) - "What we need to know here is, this application it actually gets into the entry point it creates the handle 
+	//                          of the window it creates an instance and it creates a, window itself"
+	//                          "So, main entry point it basicly creates the window."
+	//
+	//Matthew's Translation - "Below we are creating an instance of an application window"
+
 	HWND _hwnd = CreateAndRegisterWindow(_hInstance);
 
+	//Noman - Week 6 (56:35) - "So after creation, if the creation is not done succfully, ah return 0. Which means that we are trying to run multipal instances and what not"
 	if (!(_hwnd))
 	{
 		return (0);
 	}
+	//Noman - Week 6 (56:45) - "So after that main entry point"
 
 
 	// Enter main event loop
 	while (true)
 	{
 		// Test if there is a message in queue, if so get it.
+
+		//Noman - Week 6 (57:11) - "We are using PeekMessage, PeekMessage is if there is an event there will be a message. For example minimising or anything"
+		//Matthew's Translation - "What the... I have no idea what your going on about here"
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			// Test if this is a quit.
 			if (msg.message == WM_QUIT)
 			{
+
 				break;
 			}
 
