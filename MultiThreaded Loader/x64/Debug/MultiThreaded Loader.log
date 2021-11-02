@@ -1,0 +1,4 @@
+﻿  main.cpp
+D:\Torrens work Folder\Trimester 3\CAO_107\CAO107 Task 2 - Matthew Pettett\MultiThreaded Loader\main.cpp(147,10): warning C4101: '_wsFileToOpen': unreferenced local variable
+D:\Torrens work Folder\Trimester 3\CAO_107\CAO107 Task 2 - Matthew Pettett\MultiThreaded Loader\main.cpp(251,50): warning C4267: 'initializing': conversion from 'size_t' to 'int', possible loss of data
+  MultiThreaded Loader.vcxproj -> D:\Torrens work Folder\Trimester 3\CAO_107\CAO107 Task 2 - Matthew Pettett\x64\Debug\MultiThreaded Loader.exe
